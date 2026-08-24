@@ -41,6 +41,8 @@ interface Harness {
 	emit(frame: Record<string, unknown>): Promise<Record<string, unknown>>;
 	/** Response frames observed after the emission they belong to already ended. */
 	readonly lateResponses: ReadonlyArray<Record<string, unknown>>;
+	/** Waits for one fenced response without assuming when host dispatch completes. */
+	waitForLateResponse(id: string): Promise<Record<string, unknown>>;
 	/** Adjust the artificial transport delivery delay between emissions. */
 	setResponseDelay(ms: number): void;
 	start(): Promise<void>;
@@ -66,6 +68,12 @@ function createHarness(
 	// any frame arriving before or after it is fenced as stale and recorded.
 	let pending: { id: string; resolve: (frame: Record<string, unknown>) => void } | undefined;
 	const lateResponses: Array<Record<string, unknown>> = [];
+	const lateResponseWaiters: Array<{
+		id: string;
+		resolve: (frame: Record<string, unknown>) => void;
+		reject: (error: Error) => void;
+		timer?: ReturnType<typeof setTimeout>;
+	}> = [];
 	const delayedDeliveries = new Set<ReturnType<typeof setTimeout>>();
 	const transport: SessionSdkTransport = {
 		sessionId,
@@ -84,6 +92,12 @@ function createHarness(
 					current.resolve(response);
 				} else {
 					lateResponses.push(response);
+					const waiterIndex = lateResponseWaiters.findIndex(waiter => response.id === waiter.id);
+					if (waiterIndex >= 0) {
+						const waiter = lateResponseWaiters.splice(waiterIndex, 1)[0]!;
+						if (waiter.timer) clearTimeout(waiter.timer);
+						waiter.resolve(response);
+					}
 				}
 			};
 			if (responseDelayMs <= 0) {
@@ -106,6 +120,11 @@ function createHarness(
 		stop: async () => {
 			for (const timer of delayedDeliveries) clearTimeout(timer);
 			delayedDeliveries.clear();
+			for (const waiter of lateResponseWaiters) {
+				if (waiter.timer) clearTimeout(waiter.timer);
+				waiter.reject(new Error("harness stopped before the late response arrived"));
+			}
+			lateResponseWaiters.length = 0;
 		},
 	};
 	const api = {
@@ -186,6 +205,19 @@ function createHarness(
 		get lateResponses() {
 			return lateResponses;
 		},
+		waitForLateResponse: id => {
+			const existing = lateResponses.find(response => response.id === id);
+			if (existing) return Promise.resolve(existing);
+			const { promise, resolve, reject } = Promise.withResolvers<Record<string, unknown>>();
+			const waiter: (typeof lateResponseWaiters)[number] = { id, resolve, reject };
+			waiter.timer = setTimeout(() => {
+				const index = lateResponseWaiters.indexOf(waiter);
+				if (index >= 0) lateResponseWaiters.splice(index, 1);
+				reject(new Error(`late response ${id} was not delivered`));
+			}, RESPONSE_TIMEOUT_MS);
+			lateResponseWaiters.push(waiter);
+			return promise;
+		},
 	};
 }
 
@@ -227,7 +259,7 @@ test("harness handshake times out, and a late response never satisfies a later e
 		await expect(control(harness, "slow", "slow steer", "slow-ref")).rejects.toThrow("host did not respond");
 		// The stale frame for the timed-out id lands after that emission ended:
 		// it is fenced into lateResponses, never resolving a live await.
-		await Bun.sleep(200);
+		await harness.waitForLateResponse("slow");
 		expect(harness.lateResponses.length).toBe(1);
 		expect(harness.lateResponses[0]).toMatchObject({ id: "slow", type: "control_response" });
 		// A fresh emission under a different id resolves only against its own
