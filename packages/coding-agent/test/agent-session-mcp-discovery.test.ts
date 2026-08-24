@@ -854,6 +854,7 @@ describe("AgentSession MCP discovery", () => {
 			...createModel(),
 			reasoning: true,
 			thinking: { mode: "effort", minLevel: Effort.Medium, maxLevel: Effort.Medium },
+			compat: { supportsReasoningEffort: true },
 		};
 
 		const agent = new Agent({
