@@ -2,9 +2,17 @@
 
 ## [Unreleased]
 
+### Added
+
+- Added Kilo's `stealth/ox-alpha` model with its reviewed 1,048,576-token context, 131,072-token output ceiling, text/image input, and low/high/max reasoning-effort contract.
+
 ### Fixed
 
+- Direct model selections now retry zero-token empty OpenAI-compatible responses.
+- OpenAI-compatible chat streams now replay an exact `finish_reason: "network_error"` only when no text, reasoning, refusal, or tool-call delta has been exposed. Retries honor `streamMaxRetries`, exponential backoff, caller cancellation, and managed-fallback ownership; failed-attempt usage, cost, response IDs, and partial chunks are discarded while terminal error wording remains compatible (#4918).
+
 - Cursor `requestContext` rules now forward normalized system prompts, Cursor HTTP/2 transport honors standard proxy environment variables, and GPT effort siblings are sent as their base model with the corresponding reasoning parameter.
+- `AuthStorage.getEarliestUnblockAt(provider)` now exposes the earliest stored credential `blockedUntil` instant so quota exhaustion can report when a row becomes usable again without waiting for it (#4908).
 - vLLM's `allowUnauthenticated: true` now lives on the descriptor itself, not only inside its `catalogDiscovery` config. The runtime discovery gate in `packages/coding-agent/src/config/model-registry.ts` checks `isAuthenticated(apiKey) || descriptor.allowUnauthenticated`, so a local no-auth vLLM server previously needed a credential (`VLLM_API_KEY` or `/login vllm`) before its models would be discovered — unlike lm-studio/omlx, which already carry the descriptor-level flag. Catalog-generation behavior is unchanged.
 
 ## [0.15.0] - 2026-08-22
