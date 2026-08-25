@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Added
+- `gjc auth-gateway serve` now requires `--provider`, verifies an enabled broker credential before binding, and reports only redacted provider-scoped status/check information.
 
 - Added a persisted, owner-directed `ui.language` selector for human-facing settings chrome, with deterministic English fallback and an independently authored initial Korean catalog. Commands, flags, environment variables, canonical values, JSON, and other protocol output remain unchanged. Localization-boundary guidance was informed by the unofficial, unaffiliated MIT-licensed community patch [`yazzang-homelab/gajae-code-ko@aff1bfa`](https://github.com/yazzang-homelab/gajae-code-ko/commit/aff1bfa097789a8e2f13349da3c7f99b008d93b6). (#4919)
 - Added frictionless interactive onboarding for unresolved users and `/tutorial`. GJC now performs bounded, local metadata discovery across known coding-agent roots, requires corroborating activity within 90 days before inferring a workflow, falls back to manual guidance when evidence is insufficient, persists only a derived profile and completion decision, discloses unavailable sources, and previews the guided migration result before a single explicit apply or experienced-user skip.
